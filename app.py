@@ -10,13 +10,13 @@ import streamlit as st
 from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 from google.auth import credentials as google_credentials
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_extraction.text import CountVectorizer
 
 # Import GooglePalmEmbeddings
-from langchain.embeddings.google_palm import GooglePalmEmbeddings
+from langchain_community.embeddings import GooglePalmEmbeddings
 
 # Suppress gRPC warnings
 os.environ['GRPC_VERBOSITY'] = 'NONE'
@@ -88,15 +88,13 @@ def extract_important_terms(text, num_terms=10):
     common_words = Counter(words).most_common(num_terms)
     return [word for word, _ in common_words]
 
+# Placeholder function for summarizing text (need to use another API or method)
 def summarize_text(text):
-    prompt = f"Summarize the following text in bullet points:\n\n{text}"
-    summary = GooglePalmEmbeddings.create(prompt=prompt)
-    return summary.choices[0].text.strip()
+    return "Summary function needs to be implemented."
 
+# Placeholder function for generating questions (need to use another API or method)
 def generate_questions(text):
-    prompt = f"Generate questions from the following text:\n\n{text}"
-    questions = GooglePalmEmbeddings.create(prompt=prompt)
-    return questions.choices[0].text.strip()
+    return "Question generation function needs to be implemented."
 
 def main():
     st.set_page_config(page_title="Gemini PDF Chatbot", page_icon="🤖")
