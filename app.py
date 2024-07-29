@@ -11,7 +11,8 @@ from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from google.generativeai import chat as genai
+from google.generativeai import models as genai_models
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_extraction.text import CountVectorizer
 
@@ -55,7 +56,7 @@ def get_conversational_chain():
     Question: \n{question}\n
     Answer:
     """
-    model = ChatGoogleGenerativeAI(model="gemini-pro", client=genai, temperature=0.3)
+    model = genai.ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
     prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
     chain = load_qa_chain(llm=model, chain_type="stuff", prompt=prompt)
     return chain
@@ -89,13 +90,13 @@ def extract_important_terms(text, num_terms=10):
 
 def summarize_text(text):
     prompt = f"Summarize the following text in bullet points:\n\n{text}"
-    summary = genai.generate(prompt)
-    return summary
+    summary = genai_models.Completion.create(prompt=prompt)
+    return summary.choices[0].text.strip()
 
 def generate_questions(text):
     prompt = f"Generate questions from the following text:\n\n{text}"
-    questions = genai.generate(prompt)
-    return questions
+    questions = genai_models.Completion.create(prompt=prompt)
+    return questions.choices[0].text.strip()
 
 def main():
     st.set_page_config(page_title="Gemini PDF Chatbot", page_icon="🤖")
