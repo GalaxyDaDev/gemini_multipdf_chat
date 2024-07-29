@@ -1,14 +1,10 @@
 streamlit
-google-generativeai
 python-dotenv
-langchain
 PyPDF2
 faiss-cpu
-langchain_google_genai
-langchain-community
 scikit-learn
-PyMuPDF
 fitz
-langchain_community
 requests
 beautifulsoup4
+transformers
+sentence-transformers
