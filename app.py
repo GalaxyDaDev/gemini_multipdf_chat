@@ -11,7 +11,7 @@ from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from google.auth import credentials as google_credentials
+from googleapiclient.discovery import build
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_extraction.text import CountVectorizer
 
@@ -27,6 +27,11 @@ google_api_key = os.getenv("GOOGLE_API_KEY")
 if not google_api_key:
     st.error("The environment variable 'GOOGLE_API_KEY' is not set.")
     st.stop()
+
+def search_google(topic):
+    service = build("customsearch", "v1", developerKey=google_api_key)
+    res = service.cse().list(q=topic, cx='your_search_engine_id').execute()
+    return res['items']
 
 # Read all PDF files and return text
 def get_pdf_text(pdf_docs):
@@ -88,13 +93,17 @@ def extract_important_terms(text, num_terms=10):
     common_words = Counter(words).most_common(num_terms)
     return [word for word, _ in common_words]
 
-# Placeholder function for summarizing text (need to use another API or method)
 def summarize_text(text):
-    return "Summary function needs to be implemented."
+    prompt = f"Summarize the following text in bullet points:\n\n{text}"
+    embeddings = GooglePalmEmbeddings(model="gemini-pro", google_api_key=google_api_key)
+    response = embeddings.create(prompt=prompt)
+    return response.choices[0].text.strip()
 
-# Placeholder function for generating questions (need to use another API or method)
 def generate_questions(text):
-    return "Question generation function needs to be implemented."
+    prompt = f"Generate questions from the following text:\n\n{text}"
+    embeddings = GooglePalmEmbeddings(model="gemini-pro", google_api_key=google_api_key)
+    response = embeddings.create(prompt=prompt)
+    return response.choices[0].text.strip()
 
 def main():
     st.set_page_config(page_title="Gemini PDF Chatbot", page_icon="🤖")
@@ -102,24 +111,27 @@ def main():
     with st.sidebar:
         st.title("Menu:")
         pdf_docs = st.file_uploader("Upload your PDF Files and Click on the Submit & Process Button", accept_multiple_files=True)
+        topic = st.text_input("Enter the topic name for Google search")
         if st.button("Submit & Process"):
-            if pdf_docs:
+            if pdf_docs and topic:
                 with st.spinner("Processing..."):
                     with ThreadPoolExecutor() as executor:
                         raw_text = executor.submit(get_pdf_text, pdf_docs).result()
                         text_chunks = executor.submit(get_text_chunks, raw_text).result()
                         executor.submit(get_vector_store, text_chunks).result()
-                    topics = extract_topics(raw_text)
-                    important_terms = extract_important_terms(raw_text)
-                    summary = summarize_text(raw_text)
-                    questions = generate_questions(raw_text)
+                    search_results = search_google(topic)
+                    search_texts = "\n".join([result['snippet'] for result in search_results])
+                    topics = extract_topics(search_texts)
+                    important_terms = extract_important_terms(search_texts)
+                    summary = summarize_text(search_texts)
+                    questions = generate_questions(search_texts)
                     st.success("Done")
                     st.session_state.topics = topics
                     st.session_state.terms = important_terms
                     st.session_state.summary = summary
                     st.session_state.questions = questions
             else:
-                st.error("Please upload at least one PDF file.")
+                st.error("Please upload at least one PDF file and enter a topic name.")
 
     st.title("Chat with PDF files using Gemini🤖")
 
