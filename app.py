@@ -11,14 +11,12 @@ from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores import FAISS
-from google.generativeai import chat as genai_chat
-from google.generativeai import models as genai_models
 from google.auth import credentials as google_credentials
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_extraction.text import CountVectorizer
 
-# Import GoogleGenerativeAIEmbeddings
-from langchain.embeddings import GoogleGenerativeAIEmbeddings
+# Import GooglePalmEmbeddings
+from langchain.embeddings.google_palm import GooglePalmEmbeddings
 
 # Suppress gRPC warnings
 os.environ['GRPC_VERBOSITY'] = 'NONE'
@@ -29,10 +27,6 @@ google_api_key = os.getenv("GOOGLE_API_KEY")
 if not google_api_key:
     st.error("The environment variable 'GOOGLE_API_KEY' is not set.")
     st.stop()
-
-# Configure generative AI
-genai_chat.api_key = google_api_key
-genai_models.api_key = google_api_key
 
 # Read all PDF files and return text
 def get_pdf_text(pdf_docs):
@@ -51,7 +45,7 @@ def get_text_chunks(text):
 
 # Get embeddings for each chunk
 def get_vector_store(chunks):
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=google_api_key)
+    embeddings = GooglePalmEmbeddings(model="models/embedding-001", google_api_key=google_api_key)
     vector_store = FAISS.from_texts(chunks, embedding=embeddings)
     vector_store.save_local("faiss_index")
 
@@ -62,7 +56,7 @@ def get_conversational_chain():
     Question: \n{question}\n
     Answer:
     """
-    model = genai_chat.ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
+    model = GooglePalmEmbeddings(model="gemini-pro", temperature=0.3)
     prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
     chain = load_qa_chain(llm=model, chain_type="stuff", prompt=prompt)
     return chain
@@ -71,7 +65,7 @@ def clear_chat_history():
     st.session_state.messages = [{"role": "assistant", "content": "Upload some PDFs and ask me a question"}]
 
 def user_input(user_question):
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=google_api_key)
+    embeddings = GooglePalmEmbeddings(model="models/embedding-001", google_api_key=google_api_key)
     new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
     docs = new_db.similarity_search(user_question)
     chain = get_conversational_chain()
@@ -96,12 +90,12 @@ def extract_important_terms(text, num_terms=10):
 
 def summarize_text(text):
     prompt = f"Summarize the following text in bullet points:\n\n{text}"
-    summary = genai_models.Completion.create(prompt=prompt)
+    summary = GooglePalmEmbeddings.create(prompt=prompt)
     return summary.choices[0].text.strip()
 
 def generate_questions(text):
     prompt = f"Generate questions from the following text:\n\n{text}"
-    questions = genai_models.Completion.create(prompt=prompt)
+    questions = GooglePalmEmbeddings.create(prompt=prompt)
     return questions.choices[0].text.strip()
 
 def main():
