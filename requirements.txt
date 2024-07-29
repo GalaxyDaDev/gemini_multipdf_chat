@@ -7,4 +7,3 @@ requests
 beautifulsoup4
 transformers
 sentence-transformers
-newspaper3k
