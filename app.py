@@ -10,12 +10,15 @@ import streamlit as st
 from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
+from langchain.vectorstores import FAISS
 from google.generativeai import chat as genai_chat
 from google.generativeai import models as genai_models
 from google.auth import credentials as google_credentials
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_extraction.text import CountVectorizer
+
+# Import GoogleGenerativeAIEmbeddings
+from langchain.embeddings import GoogleGenerativeAIEmbeddings
 
 # Suppress gRPC warnings
 os.environ['GRPC_VERBOSITY'] = 'NONE'
