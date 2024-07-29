@@ -29,12 +29,24 @@ if not google_api_key:
     st.stop()
 
 def search_duckduckgo(topic):
-    url = f"https://api.duckduckgo.com/?q={topic}&format=json"
+    url = f"https://api.duckduckgo.com/?q={topic}&format=json&no_html=1"
     response = requests.get(url)
     response.raise_for_status()
     data = response.json().get('RelatedTopics', [])
-    texts = [item['Text'] for item in data if 'Text' in item]
-    return texts
+    if data:
+        return data[0].get('FirstURL', ''), data[0].get('Text', '')
+    return '', ''
+
+def fetch_web_page(url):
+    response = requests.get(url)
+    response.raise_for_status()
+    return response.text
+
+def extract_text_from_html(html):
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, 'html.parser')
+    texts = soup.stripped_strings
+    return ' '.join(texts)
 
 # Read all PDF files and return text
 def get_pdf_text(pdf_docs):
@@ -80,12 +92,9 @@ def user_input(user_question):
     response = chain.invoke({"input_documents": docs, "question": user_question}, return_only_outputs=True)
     return response['output_text']
 
-def extract_topics(texts, num_topics=5):
-    if not texts:
-        return []
-    
+def extract_topics(text, num_topics=5):
     vectorizer = CountVectorizer(stop_words='english')
-    X = vectorizer.fit_transform(texts)
+    X = vectorizer.fit_transform([text])
     lda = LatentDirichletAllocation(n_components=num_topics, random_state=42)
     lda.fit(X)
     topics = []
@@ -94,30 +103,18 @@ def extract_topics(texts, num_topics=5):
         topics.append(" ".join(topic_words))
     return topics
 
-def extract_important_terms(texts, num_terms=10):
-    if not texts:
-        return []
-    
-    text = " ".join(texts)
+def extract_important_terms(text, num_terms=10):
     words = re.findall(r'\b\w+\b', text.lower())
     common_words = Counter(words).most_common(num_terms)
     return [word for word, _ in common_words]
 
-def summarize_text(texts):
-    if not texts:
-        return "No text available for summarization."
-    
-    text = " ".join(texts)
+def summarize_text(text):
     prompt = f"Summarize the following text in bullet points:\n\n{text}"
     embeddings = GooglePalmEmbeddings(model="gemini-pro", google_api_key=google_api_key)
     response = embeddings.create(prompt=prompt)
     return response.choices[0].text.strip()
 
-def generate_questions(texts):
-    if not texts:
-        return "No text available for question generation."
-    
-    text = " ".join(texts)
+def generate_questions(text):
     prompt = f"Generate questions from the following text:\n\n{text}"
     embeddings = GooglePalmEmbeddings(model="gemini-pro", google_api_key=google_api_key)
     response = embeddings.create(prompt=prompt)
@@ -129,7 +126,7 @@ def main():
     with st.sidebar:
         st.title("Menu:")
         pdf_docs = st.file_uploader("Upload your PDF Files and Click on the Submit & Process Button", accept_multiple_files=True)
-        topic = st.text_input("Enter the topic name for Google search")
+        topic = st.text_input("Enter the topic name for search")
         if st.button("Submit & Process"):
             if pdf_docs and topic:
                 with st.spinner("Processing..."):
@@ -137,14 +134,22 @@ def main():
                         raw_text = executor.submit(get_pdf_text, pdf_docs).result()
                         text_chunks = executor.submit(get_text_chunks, raw_text).result()
                         executor.submit(get_vector_store, text_chunks).result()
-                    search_results = search_duckduckgo(topic)
-                    if not search_results:
-                        st.error("No search results found.")
+
+                    url, snippet = search_duckduckgo(topic)
+                    if url:
+                        web_page_content = fetch_web_page(url)
+                        extracted_text = extract_text_from_html(web_page_content)
+                    else:
+                        extracted_text = snippet
+
+                    if not extracted_text:
+                        st.error("No relevant content found.")
                         return
-                    topics = extract_topics(search_results)
-                    important_terms = extract_important_terms(search_results)
-                    summary = summarize_text(search_results)
-                    questions = generate_questions(search_results)
+
+                    topics = extract_topics(extracted_text)
+                    important_terms = extract_important_terms(extracted_text)
+                    summary = summarize_text(extracted_text)
+                    questions = generate_questions(extracted_text)
                     st.success("Done")
                     st.session_state.topics = topics
                     st.session_state.terms = important_terms
