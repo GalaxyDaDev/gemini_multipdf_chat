@@ -17,6 +17,7 @@ from sklearn.decomposition import LatentDirichletAllocation
 os.environ['GRPC_VERBOSITY'] = 'NONE'
 
 # Ensure the environment variable is set
+load_dotenv()
 google_api_key = os.getenv("GOOGLE_API_KEY")
 if not google_api_key:
     st.error("The environment variable 'GOOGLE_API_KEY' is not set.")
@@ -103,12 +104,6 @@ def main():
     st.write("Welcome to the chat!")
     st.sidebar.button('Clear Chat History', on_click=clear_chat_history)
 
-    # Display important topics
-    if "topics" in st.session_state:
-        st.subheader("Important Topics from the PDFs:")
-        for topic in st.session_state.topics:
-            st.write(f"- {topic}")
-
     # Chat input
     if "messages" not in st.session_state.keys():
         st.session_state.messages = [{"role": "assistant", "content": "Upload some PDFs and ask me a question"}]
@@ -122,7 +117,6 @@ def main():
         with st.chat_message("user"):
             st.write(prompt)
 
-    # Display chat messages and bot response
     if st.session_state.messages[-1]["role"] != "assistant":
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
