@@ -11,7 +11,6 @@ from transformers import pipeline, T5Tokenizer, T5ForConditionalGeneration
 from sentence_transformers import SentenceTransformer
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_extraction.text import CountVectorizer
-from newspaper import Article
 from bs4 import BeautifulSoup
 
 # Load environment variables
@@ -24,6 +23,7 @@ tokenizer = T5Tokenizer.from_pretrained("valhalla/t5-small-qg-hl")
 model = T5ForConditionalGeneration.from_pretrained("valhalla/t5-small-qg-hl")
 
 def search_web(topic):
+    """Searches the web for a given topic and returns titles, links, and snippets."""
     search_url = f"https://www.bing.com/search?q={topic}"
     response = requests.get(search_url)
     soup = BeautifulSoup(response.text, 'html.parser')
@@ -35,16 +35,20 @@ def search_web(topic):
         links.append((title, link, snippet))
     return links
 
-def fetch_article(url):
+def fetch_article_content(url):
+    """Fetches the text content from a web article."""
     try:
-        article = Article(url)
-        article.download()
-        article.parse()
-        return article.text
+        response = requests.get(url)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+        paragraphs = soup.find_all('p')
+        text = ' '.join([para.get_text() for para in paragraphs])
+        return text
     except Exception as e:
         return ""
 
 def get_pdf_text(pdf_docs):
+    """Extracts text from PDF documents."""
     text = ""
     for pdf in pdf_docs:
         reader = PyPDF2.PdfReader(pdf)
@@ -54,6 +58,7 @@ def get_pdf_text(pdf_docs):
     return text
 
 def get_text_chunks(text, chunk_size=2000, chunk_overlap=300):
+    """Splits text into chunks."""
     chunks = []
     start = 0
     while start < len(text):
@@ -63,26 +68,31 @@ def get_text_chunks(text, chunk_size=2000, chunk_overlap=300):
     return chunks
 
 def get_vector_store(chunks):
+    """Generates embeddings for text chunks."""
     embeddings = embedding_model.encode(chunks)
     return embeddings, chunks
 
 def get_conversational_chain():
+    """Returns a function to answer questions based on embeddings."""
     def answer_question(question, embeddings, chunks):
         question_embedding = embedding_model.encode([question])
-        similarities = [np.dot(question_embedding, e) for e in embeddings]
-        best_idx = np.argmax(similarities)
+        similarities = [question_embedding @ e for e in embeddings]
+        best_idx = similarities.index(max(similarities))
         return chunks[best_idx]
     return answer_question
 
 def clear_chat_history():
+    """Clears the chat history."""
     st.session_state.messages = [{"role": "assistant", "content": "Upload some PDFs and ask me a question"}]
 
 def user_input(user_question, embeddings, chunks):
+    """Handles user input and returns an appropriate response."""
     answer_chain = get_conversational_chain()
     response = answer_chain(user_question, embeddings, chunks)
     return response
 
 def extract_topics(text, num_topics=5):
+    """Extracts topics from text using LDA."""
     vectorizer = CountVectorizer(stop_words='english')
     X = vectorizer.fit_transform([text])
     lda = LatentDirichletAllocation(n_components=num_topics, random_state=42)
@@ -94,15 +104,18 @@ def extract_topics(text, num_topics=5):
     return topics
 
 def extract_important_terms(text, num_terms=10):
+    """Extracts important terms from text."""
     words = re.findall(r'\b\w+\b', text.lower())
     common_words = Counter(words).most_common(num_terms)
     return [word for word, _ in common_words]
 
 def summarize_text(text):
+    """Summarizes text."""
     summary = summarizer(text, max_length=150, min_length=50, do_sample=False)
     return summary[0]['summary_text']
 
 def generate_questions(text):
+    """Generates questions from text."""
     input_text = "generate questions: " + text
     input_ids = tokenizer.encode(input_text, return_tensors='pt', truncation=True)
     outputs = model.generate(input_ids, max_length=256, num_return_sequences=5, num_beams=5)
@@ -110,6 +123,7 @@ def generate_questions(text):
     return questions
 
 def main():
+    """Main function to run the Streamlit app."""
     st.set_page_config(page_title="Advanced PDF Chatbot", page_icon="🤖")
 
     with st.sidebar:
@@ -119,15 +133,16 @@ def main():
         if st.button("Submit & Process"):
             if pdf_docs and topic:
                 with st.spinner("Processing..."):
-                    with ThreadPoolExecutor() as executor:
-                        raw_text = executor.submit(get_pdf_text, pdf_docs).result()
-                        text_chunks = executor.submit(get_text_chunks, raw_text).result()
-                        embeddings, chunks = get_vector_store(text_chunks)
+                    # Process PDF files
+                    raw_text = get_pdf_text(pdf_docs)
+                    text_chunks = get_text_chunks(raw_text)
+                    embeddings, chunks = get_vector_store(text_chunks)
 
+                    # Search the web for additional information
                     links = search_web(topic)
                     extracted_texts = []
                     for title, link, snippet in links:
-                        text = fetch_article(link)
+                        text = fetch_article_content(link)
                         if text:
                             extracted_texts.append(text)
 
