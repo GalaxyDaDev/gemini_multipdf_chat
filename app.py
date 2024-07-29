@@ -2,7 +2,6 @@ import os
 import re
 import requests
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
 import PyPDF2
