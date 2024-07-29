@@ -12,7 +12,8 @@ from langchain.prompts import PromptTemplate
 from langchain.chains.question_answering import load_qa_chain
 from langchain_community.vectorstores import FAISS
 from dotenv import load_dotenv
-from PyPDF2 import PdfReader
+import PyPDF2
+from concurrent.futures import ThreadPoolExecutor
 
 # Suppress gRPC warnings
 os.environ['GRPC_VERBOSITY'] = 'NONE'
@@ -29,17 +30,16 @@ else:
 def get_pdf_text(pdf_docs):
     text = ""
     for pdf in pdf_docs:
-        doc = fitz.open(stream=pdf.read(), filetype="pdf")
-        for page_num in range(len(doc)):
-            page = doc.load_page(page_num)
-            text += page.get_text()
+        reader = PyPDF2.PdfFileReader(pdf)
+        for page_num in range(reader.getNumPages()):
+            page = reader.getPage(page_num)
+            text += page.extract_text()
     return text
 
 # Split text into chunks
 def get_text_chunks(text):
     splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=300)
-    chunks = splitter.split_text(text)
-    return chunks
+    return splitter.split_text(text)
 
 # Get embeddings for each chunk
 def get_vector_store(chunks):
@@ -76,7 +76,7 @@ def extract_topics(text, num_topics=5):
     lda = LatentDirichletAllocation(n_components=num_topics, random_state=42)
     lda.fit(X)
     topics = []
-    for idx, topic in enumerate(lda.components_):
+    for topic in lda.components_:
         topic_words = [vectorizer.get_feature_names_out()[i] for i in topic.argsort()[-10:]]
         topics.append(" ".join(topic_words))
     return topics
@@ -104,9 +104,10 @@ def main():
         pdf_docs = st.file_uploader("Upload your PDF Files and Click on the Submit & Process Button", accept_multiple_files=True)
         if st.button("Submit & Process"):
             with st.spinner("Processing..."):
-                raw_text = get_pdf_text(pdf_docs)
-                text_chunks = get_text_chunks(raw_text)
-                get_vector_store(text_chunks)
+                with ThreadPoolExecutor() as executor:
+                    raw_text = executor.submit(get_pdf_text, pdf_docs).result()
+                    text_chunks = executor.submit(get_text_chunks, raw_text).result()
+                    executor.submit(get_vector_store, text_chunks).result()
                 topics = extract_topics(raw_text)
                 important_terms = extract_important_terms(raw_text)
                 summary = summarize_text(raw_text)
