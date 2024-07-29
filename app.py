@@ -14,7 +14,6 @@ from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_extraction.text import CountVectorizer
-from tqdm import tqdm
 
 # Suppress gRPC warnings
 os.environ['GRPC_VERBOSITY'] = 'NONE'
