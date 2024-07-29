@@ -11,3 +11,4 @@ PyMuPDF
 fitz
 langchain_community
 requests
+beautifulsoup4
