@@ -11,8 +11,9 @@ from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from google.generativeai import chat as genai
+from google.generativeai import chat as genai_chat
 from google.generativeai import models as genai_models
+from google.auth import credentials as google_credentials
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_extraction.text import CountVectorizer
 
@@ -25,8 +26,10 @@ google_api_key = os.getenv("GOOGLE_API_KEY")
 if not google_api_key:
     st.error("The environment variable 'GOOGLE_API_KEY' is not set.")
     st.stop()
-else:
-    genai.configure(api_key=google_api_key)
+
+# Configure generative AI
+genai_chat.api_key = google_api_key
+genai_models.api_key = google_api_key
 
 # Read all PDF files and return text
 def get_pdf_text(pdf_docs):
@@ -56,7 +59,7 @@ def get_conversational_chain():
     Question: \n{question}\n
     Answer:
     """
-    model = genai.ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
+    model = genai_chat.ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
     prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
     chain = load_qa_chain(llm=model, chain_type="stuff", prompt=prompt)
     return chain
