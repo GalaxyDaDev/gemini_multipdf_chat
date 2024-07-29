@@ -12,6 +12,8 @@ from langchain.prompts import PromptTemplate
 from dotenv import load_dotenv
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
+import re
+from collections import Counter
 
 # Suppress gRPC warnings
 os.environ['GRPC_VERBOSITY'] = 'NONE'
@@ -24,7 +26,7 @@ if not google_api_key:
 else:
     genai.configure(api_key=google_api_key)
 
-# read all pdf files and return text
+# Read all PDF files and return text
 def get_pdf_text(pdf_docs):
     text = ""
     for pdf in pdf_docs:
@@ -34,13 +36,13 @@ def get_pdf_text(pdf_docs):
             text += page.get_text()
     return text
 
-# split text into chunks
+# Split text into chunks
 def get_text_chunks(text):
-    splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=300)
     chunks = splitter.split_text(text)
     return chunks  # list of strings
 
-# get embeddings for each chunk
+# Get embeddings for each chunk
 def get_vector_store(chunks):
     embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=google_api_key)  # Pass API key directly
     vector_store = FAISS.from_texts(chunks, embedding=embeddings)
@@ -48,11 +50,9 @@ def get_vector_store(chunks):
 
 def get_conversational_chain():
     prompt_template = """
-    Answer the question as detailed as possible from the provided context, make sure to provide all the details, if the answer is not in
-    provided context just say, "answer is not available in the context", don't provide the wrong answer\n\n
+    Answer the question as detailed as possible from the provided context. If the answer is not in the provided context, just say, "The answer is not available in the context." Don't provide a wrong answer.\n\n
     Context:\n {context}?\n
     Question: \n{question}\n
-
     Answer:
     """
     model = ChatGoogleGenerativeAI(model="gemini-pro", client=genai, temperature=0.3)
@@ -69,8 +69,7 @@ def user_input(user_question):
     docs = new_db.similarity_search(user_question)
     chain = get_conversational_chain()
     response = chain.invoke({"input_documents": docs, "question": user_question}, return_only_outputs=True)
-    print(response)
-    return response
+    return response['output_text']
 
 def extract_topics(text, num_topics=5):
     vectorizer = CountVectorizer(stop_words='english')
@@ -82,6 +81,11 @@ def extract_topics(text, num_topics=5):
         topic_words = [vectorizer.get_feature_names_out()[i] for i in topic.argsort()[-10:]]
         topics.append(" ".join(topic_words))
     return topics
+
+def extract_important_terms(text, num_terms=10):
+    words = re.findall(r'\b\w+\b', text.lower())
+    common_words = Counter(words).most_common(num_terms)
+    return [word for word, _ in common_words]
 
 def main():
     st.set_page_config(page_title="Gemini PDF Chatbot", page_icon="🤖")
@@ -96,12 +100,22 @@ def main():
                 text_chunks = get_text_chunks(raw_text)
                 get_vector_store(text_chunks)
                 topics = extract_topics(raw_text)
+                important_terms = extract_important_terms(raw_text)
                 st.success("Done")
                 st.session_state.topics = topics
+                st.session_state.terms = important_terms
 
     # Main content area for displaying chat messages
     st.title("Chat with PDF files using Gemini🤖")
-    st.write("Welcome to the chat!")
+    if "topics" in st.session_state:
+        st.write("Important Topics:")
+        for topic in st.session_state.topics:
+            st.write(f"- {topic}")
+    if "terms" in st.session_state:
+        st.write("Important Terms:")
+        for term in st.session_state.terms:
+            st.write(f"- {term}")
+    
     st.sidebar.button('Clear Chat History', on_click=clear_chat_history)
 
     # Chat input
@@ -123,7 +137,7 @@ def main():
                 response = user_input(prompt)
                 placeholder = st.empty()
                 full_response = ''
-                for item in response['output_text']:
+                for item in response:
                     full_response += item
                     placeholder.markdown(full_response)
                 placeholder.markdown(full_response)
