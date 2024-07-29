@@ -23,6 +23,7 @@ load_dotenv()
 google_api_key = os.getenv("GOOGLE_API_KEY")
 if not google_api_key:
     st.error("The environment variable 'GOOGLE_API_KEY' is not set.")
+    st.stop()
 else:
     genai.configure(api_key=google_api_key)
 
@@ -30,10 +31,10 @@ else:
 def get_pdf_text(pdf_docs):
     text = ""
     for pdf in pdf_docs:
-        reader = PyPDF2.PdfFileReader(pdf)
-        for page_num in range(reader.getNumPages()):
-            page = reader.getPage(page_num)
-            text += page.extract_text()
+        reader = PyPDF2.PdfReader(pdf)
+        for page_num in range(len(reader.pages)):
+            page = reader.pages[page_num]
+            text += page.extract_text() if page.extract_text() else ""
     return text
 
 # Split text into chunks
@@ -103,20 +104,23 @@ def main():
         st.title("Menu:")
         pdf_docs = st.file_uploader("Upload your PDF Files and Click on the Submit & Process Button", accept_multiple_files=True)
         if st.button("Submit & Process"):
-            with st.spinner("Processing..."):
-                with ThreadPoolExecutor() as executor:
-                    raw_text = executor.submit(get_pdf_text, pdf_docs).result()
-                    text_chunks = executor.submit(get_text_chunks, raw_text).result()
-                    executor.submit(get_vector_store, text_chunks).result()
-                topics = extract_topics(raw_text)
-                important_terms = extract_important_terms(raw_text)
-                summary = summarize_text(raw_text)
-                questions = generate_questions(raw_text)
-                st.success("Done")
-                st.session_state.topics = topics
-                st.session_state.terms = important_terms
-                st.session_state.summary = summary
-                st.session_state.questions = questions
+            if pdf_docs:
+                with st.spinner("Processing..."):
+                    with ThreadPoolExecutor() as executor:
+                        raw_text = executor.submit(get_pdf_text, pdf_docs).result()
+                        text_chunks = executor.submit(get_text_chunks, raw_text).result()
+                        executor.submit(get_vector_store, text_chunks).result()
+                    topics = extract_topics(raw_text)
+                    important_terms = extract_important_terms(raw_text)
+                    summary = summarize_text(raw_text)
+                    questions = generate_questions(raw_text)
+                    st.success("Done")
+                    st.session_state.topics = topics
+                    st.session_state.terms = important_terms
+                    st.session_state.summary = summary
+                    st.session_state.questions = questions
+            else:
+                st.error("Please upload at least one PDF file.")
 
     st.title("Chat with PDF files using Gemini🤖")
 
