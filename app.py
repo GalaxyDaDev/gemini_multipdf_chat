@@ -6,7 +6,6 @@ from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
 import PyPDF2
-import fitz  # PyMuPDF
 import streamlit as st
 from transformers import pipeline, T5Tokenizer, T5ForConditionalGeneration
 from sentence_transformers import SentenceTransformer
