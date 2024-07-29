@@ -18,7 +18,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 # Suppress gRPC warnings
 os.environ['GRPC_VERBOSITY'] = 'NONE'
 
-# Ensure the environment variable is set
+# Load environment variables
 load_dotenv()
 google_api_key = os.getenv("GOOGLE_API_KEY")
 if not google_api_key:
