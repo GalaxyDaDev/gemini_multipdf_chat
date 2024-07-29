@@ -1,19 +1,20 @@
 import os
 import re
 from collections import Counter
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.decomposition import LatentDirichletAllocation
-import streamlit as st
-import fitz  # PyMuPDF
-import google.generativeai as genai
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain.prompts import PromptTemplate
-from langchain.chains.question_answering import load_qa_chain
-from langchain_community.vectorstores import FAISS
-from dotenv import load_dotenv
-import PyPDF2
 from concurrent.futures import ThreadPoolExecutor
+from dotenv import load_dotenv
+
+import PyPDF2
+import fitz  # PyMuPDF
+import streamlit as st
+from langchain.chains.question_answering import load_qa_chain
+from langchain.prompts import PromptTemplate
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.feature_extraction.text import CountVectorizer
+from tqdm import tqdm
 
 # Suppress gRPC warnings
 os.environ['GRPC_VERBOSITY'] = 'NONE'
