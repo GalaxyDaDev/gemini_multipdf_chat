@@ -10,4 +10,4 @@ scikit-learn
 PyMuPDF
 fitz
 langchain_community
-google-api-python-client
+requests
