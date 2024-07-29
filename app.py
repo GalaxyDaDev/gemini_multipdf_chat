@@ -12,6 +12,8 @@ from transformers import pipeline, T5Tokenizer, T5ForConditionalGeneration
 from sentence_transformers import SentenceTransformer
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_extraction.text import CountVectorizer
+from newspaper import Article
+from bs4 import BeautifulSoup
 
 # Load environment variables
 load_dotenv()
@@ -22,25 +24,26 @@ summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
 tokenizer = T5Tokenizer.from_pretrained("valhalla/t5-small-qg-hl")
 model = T5ForConditionalGeneration.from_pretrained("valhalla/t5-small-qg-hl")
 
-def search_duckduckgo(topic):
-    url = f"https://api.duckduckgo.com/?q={topic}&format=json&no_html=1"
-    response = requests.get(url)
-    response.raise_for_status()
-    data = response.json().get('RelatedTopics', [])
-    if data:
-        return data[0].get('FirstURL', ''), data[0].get('Text', '')
-    return '', ''
+def search_web(topic):
+    search_url = f"https://www.bing.com/search?q={topic}"
+    response = requests.get(search_url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    links = []
+    for item in soup.find_all('li', {'class': 'b_algo'}):
+        title = item.find('h2').text
+        link = item.find('a')['href']
+        snippet = item.find('p').text if item.find('p') else ""
+        links.append((title, link, snippet))
+    return links
 
-def fetch_web_page(url):
-    response = requests.get(url)
-    response.raise_for_status()
-    return response.text
-
-def extract_text_from_html(html):
-    from bs4 import BeautifulSoup
-    soup = BeautifulSoup(html, 'html.parser')
-    texts = soup.stripped_strings
-    return ' '.join(texts)
+def fetch_article(url):
+    try:
+        article = Article(url)
+        article.download()
+        article.parse()
+        return article.text
+    except Exception as e:
+        return ""
 
 def get_pdf_text(pdf_docs):
     text = ""
@@ -108,7 +111,7 @@ def generate_questions(text):
     return questions
 
 def main():
-    st.set_page_config(page_title="OpenAI PDF Chatbot", page_icon="🤖")
+    st.set_page_config(page_title="Advanced PDF Chatbot", page_icon="🤖")
 
     with st.sidebar:
         st.title("Menu:")
@@ -122,21 +125,22 @@ def main():
                         text_chunks = executor.submit(get_text_chunks, raw_text).result()
                         embeddings, chunks = get_vector_store(text_chunks)
 
-                    url, snippet = search_duckduckgo(topic)
-                    if url:
-                        web_page_content = fetch_web_page(url)
-                        extracted_text = extract_text_from_html(web_page_content)
-                    else:
-                        extracted_text = snippet
+                    links = search_web(topic)
+                    extracted_texts = []
+                    for title, link, snippet in links:
+                        text = fetch_article(link)
+                        if text:
+                            extracted_texts.append(text)
 
-                    if not extracted_text:
+                    if not extracted_texts:
                         st.error("No relevant content found.")
                         return
 
-                    topics = extract_topics(extracted_text)
-                    important_terms = extract_important_terms(extracted_text)
-                    summary = summarize_text(extracted_text)
-                    questions = generate_questions(extracted_text)
+                    combined_text = " ".join(extracted_texts)
+                    topics = extract_topics(combined_text)
+                    important_terms = extract_important_terms(combined_text)
+                    summary = summarize_text(combined_text)
+                    questions = generate_questions(combined_text)
                     st.success("Done")
                     st.session_state.topics = topics
                     st.session_state.terms = important_terms
@@ -145,7 +149,7 @@ def main():
             else:
                 st.error("Please upload at least one PDF file and enter a topic name.")
 
-    st.title("Chat with PDF files using OpenAI🤖")
+    st.title("Chat with PDF files using Advanced NLP🤖")
 
     if "summary" in st.session_state:
         st.write("Summary:")
