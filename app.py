@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import PyPDF2
 import fitz  # PyMuPDF
 import streamlit as st
-from transformers import pipeline
+from transformers import pipeline, T5Tokenizer, T5ForConditionalGeneration
 from sentence_transformers import SentenceTransformer
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_extraction.text import CountVectorizer
@@ -16,11 +16,11 @@ from sklearn.feature_extraction.text import CountVectorizer
 # Load environment variables
 load_dotenv()
 
-# Define the model for sentence embeddings and transformers pipelines
-model_name = 'distilbert-base-nli-stsb-mean-tokens'
-embedding_model = SentenceTransformer(model_name)
+# Initialize models and pipelines
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-question_generator = pipeline("question-generation", model="valhalla/t5-small-qg-hl")
+tokenizer = T5Tokenizer.from_pretrained("valhalla/t5-small-qg-hl")
+model = T5ForConditionalGeneration.from_pretrained("valhalla/t5-small-qg-hl")
 
 def search_duckduckgo(topic):
     url = f"https://api.duckduckgo.com/?q={topic}&format=json&no_html=1"
@@ -62,11 +62,9 @@ def get_text_chunks(text, chunk_size=2000, chunk_overlap=300):
 
 def get_vector_store(chunks):
     embeddings = embedding_model.encode(chunks)
-    # For simplicity, we can store the embeddings and chunks in memory
     return embeddings, chunks
 
 def get_conversational_chain():
-    # Using a simple model to answer questions based on embeddings
     def answer_question(question, embeddings, chunks):
         question_embedding = embedding_model.encode([question])
         similarities = [np.dot(question_embedding, e) for e in embeddings]
@@ -103,8 +101,11 @@ def summarize_text(text):
     return summary[0]['summary_text']
 
 def generate_questions(text):
-    questions = question_generator(text)
-    return [q['question'] for q in questions]
+    input_text = "generate questions: " + text
+    input_ids = tokenizer.encode(input_text, return_tensors='pt', truncation=True)
+    outputs = model.generate(input_ids, max_length=256, num_return_sequences=5, num_beams=5)
+    questions = [tokenizer.decode(output, skip_special_tokens=True) for output in outputs]
+    return questions
 
 def main():
     st.set_page_config(page_title="OpenAI PDF Chatbot", page_icon="🤖")
@@ -183,15 +184,8 @@ def main():
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 response = user_input(prompt, embeddings, chunks)
-                placeholder = st.empty()
-                full_response = ''
-                for item in response:
-                    full_response += item
-                    placeholder.markdown(full_response)
-                placeholder.markdown(full_response)
-        if response is not None:
-            message = {"role": "assistant", "content": full_response}
-            st.session_state.messages.append(message)
+                st.write(response)
+                st.session_state.messages.append({"role": "assistant", "content": response})
 
 if __name__ == "__main__":
     main()
