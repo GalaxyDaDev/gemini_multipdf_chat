@@ -1,6 +1,6 @@
 import os
 import re
-import requests  # Import requests module
+import requests
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
@@ -31,7 +31,10 @@ if not google_api_key:
 def search_duckduckgo(topic):
     url = f"https://api.duckduckgo.com/?q={topic}&format=json"
     response = requests.get(url)
-    return response.json().get('RelatedTopics', [])
+    response.raise_for_status()
+    data = response.json().get('RelatedTopics', [])
+    texts = [item['Text'] for item in data if 'Text' in item]
+    return texts
 
 # Read all PDF files and return text
 def get_pdf_text(pdf_docs):
@@ -77,9 +80,12 @@ def user_input(user_question):
     response = chain.invoke({"input_documents": docs, "question": user_question}, return_only_outputs=True)
     return response['output_text']
 
-def extract_topics(text, num_topics=5):
+def extract_topics(texts, num_topics=5):
+    if not texts:
+        return []
+    
     vectorizer = CountVectorizer(stop_words='english')
-    X = vectorizer.fit_transform([text])
+    X = vectorizer.fit_transform(texts)
     lda = LatentDirichletAllocation(n_components=num_topics, random_state=42)
     lda.fit(X)
     topics = []
@@ -88,18 +94,30 @@ def extract_topics(text, num_topics=5):
         topics.append(" ".join(topic_words))
     return topics
 
-def extract_important_terms(text, num_terms=10):
+def extract_important_terms(texts, num_terms=10):
+    if not texts:
+        return []
+    
+    text = " ".join(texts)
     words = re.findall(r'\b\w+\b', text.lower())
     common_words = Counter(words).most_common(num_terms)
     return [word for word, _ in common_words]
 
-def summarize_text(text):
+def summarize_text(texts):
+    if not texts:
+        return "No text available for summarization."
+    
+    text = " ".join(texts)
     prompt = f"Summarize the following text in bullet points:\n\n{text}"
     embeddings = GooglePalmEmbeddings(model="gemini-pro", google_api_key=google_api_key)
     response = embeddings.create(prompt=prompt)
     return response.choices[0].text.strip()
 
-def generate_questions(text):
+def generate_questions(texts):
+    if not texts:
+        return "No text available for question generation."
+    
+    text = " ".join(texts)
     prompt = f"Generate questions from the following text:\n\n{text}"
     embeddings = GooglePalmEmbeddings(model="gemini-pro", google_api_key=google_api_key)
     response = embeddings.create(prompt=prompt)
@@ -120,11 +138,13 @@ def main():
                         text_chunks = executor.submit(get_text_chunks, raw_text).result()
                         executor.submit(get_vector_store, text_chunks).result()
                     search_results = search_duckduckgo(topic)
-                    search_texts = "\n".join([result['Text'] for result in search_results])
-                    topics = extract_topics(search_texts)
-                    important_terms = extract_important_terms(search_texts)
-                    summary = summarize_text(search_texts)
-                    questions = generate_questions(search_texts)
+                    if not search_results:
+                        st.error("No search results found.")
+                        return
+                    topics = extract_topics(search_results)
+                    important_terms = extract_important_terms(search_results)
+                    summary = summarize_text(search_results)
+                    questions = generate_questions(search_results)
                     st.success("Done")
                     st.session_state.topics = topics
                     st.session_state.terms = important_terms
