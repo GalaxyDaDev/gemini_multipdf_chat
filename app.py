@@ -11,7 +11,6 @@ from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from googleapiclient.discovery import build
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_extraction.text import CountVectorizer
 
@@ -28,10 +27,10 @@ if not google_api_key:
     st.error("The environment variable 'GOOGLE_API_KEY' is not set.")
     st.stop()
 
-def search_google(topic):
-    service = build("customsearch", "v1", developerKey=google_api_key)
-    res = service.cse().list(q=topic, cx='your_search_engine_id').execute()
-    return res['items']
+def search_duckduckgo(topic):
+    url = f"https://api.duckduckgo.com/?q={topic}&format=json"
+    response = requests.get(url)
+    return response.json().get('RelatedTopics', [])
 
 # Read all PDF files and return text
 def get_pdf_text(pdf_docs):
@@ -119,8 +118,8 @@ def main():
                         raw_text = executor.submit(get_pdf_text, pdf_docs).result()
                         text_chunks = executor.submit(get_text_chunks, raw_text).result()
                         executor.submit(get_vector_store, text_chunks).result()
-                    search_results = search_google(topic)
-                    search_texts = "\n".join([result['snippet'] for result in search_results])
+                    search_results = search_duckduckgo(topic)
+                    search_texts = "\n".join([result['Text'] for result in search_results])
                     topics = extract_topics(search_texts)
                     important_terms = extract_important_terms(search_texts)
                     summary = summarize_text(search_texts)
